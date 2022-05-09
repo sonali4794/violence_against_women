@@ -1,0 +1,367 @@
+---
+title: "Insights from Machine Learning Models on cases of Violence against Women in India"
+author: "Sonali Mishra"
+date: "09/05/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, cache = TRUE)
+# installs the librarian package if you don't have it
+if (!("librarian" %in% rownames(utils::installed.packages()))) {
+  utils::install.packages("librarian")
+}
+# put all of the packages that you import here
+librarian::shelf( 
+  cran_repo = "https://cran.microsoft.com/", # Dallas, TX
+  ask = FALSE,
+  stats, # https://stackoverflow.com/questions/26935095/r-dplyr-filter-not-masking-base-filter#answer-26935536
+  here,
+  kableExtra,
+  rlang,
+  ggthemes,
+  tidyverse,
+  janitor,
+  magrittr,
+  glue,
+  lubridate,
+  haven,
+  snakecase,
+  sandwich,
+  lmtest,
+  gganimate,
+  gapminder,
+  stargazer,
+  snakecase,
+  rpart,
+  rpart.plot,
+  rsample,
+  randomForest,
+  modelr,
+  gbm,
+  pdp,
+  remotes,
+  urbnmapr,
+  ggmap,
+  maps,
+  mapdata,
+  usmap,
+  scales,
+  foreach,
+  caret,
+  mosaic,
+  LICORS,
+  ggcorrplot,
+  arules,
+  arulesViz,
+  igraph,
+  RColorBrewer,
+  parallel,
+  iterators,
+  doParallel,
+  gifski
+)
+# tell here where we are so we can use it elsewhere
+here::i_am("Data-Mining-PS4/include.R")
+```
+
+## Abstract
+
+
+The paper examines gender-based violence against women scenario in India across states, union territories and districts. We look at various factors such as presence of law enforcement specifically geared towards safety of women, socio-economic positioning of females in the society in terms of decision making, education and employment and current crime rate against women prevailing in the country. Perform clustering to understand similarities and resemblances between states and finally develop a predictive model to forecast crime rate. 
+
+
+## Introduction
+
+
+India ranks as one of the most unsafe countries for in terms of women safety. According to NCRB (National Crime Records Bureau) crime is committed against women every 3 minutes. Crime is committed in different forms such as domestic violence, rape, dowry, modesty defamation and more. Alarmingly 65% of the men believe that women “deserve to be beaten up”. Recipients of the crime range from infants to elderly. 
+
+
+The literature on violence targeted at women highlights some key factors. Male dominance coupled with female submission is known to aggravate the problem. Multiple studies suggest that women feel more powerless than men given the same circumstances. Imposition by men who think they are entitled to supremacy makes the situation worse. Moreover, law enforcement institutions by executive (Police) and judiciary have not been efficient enough either. Huge number of women abuse cases are being reported as false, large number of cases are pending at court, the laws are not well defined, juvenile criminals are being excused and many more such gaps. 
+
+
+10 years ago, the famous “Nirbhaya” case led to an uproar across the nation leading to country-wide protest and condemnation from international organizations. This heat continued for next 5 years and in response to the same current Modi-led government began a one stop centre scheme wherein institutions are to be setup across the country to address all relevant challenges women face while tacking abuse and violence. The centre aims to be equipped to support with filing complaints, counselling, emergency services, medical assistance, legal aid, shelter, helpline and video conferencing facilities etc. My intention here is to propose a more machine learning driven approach to predict crime rate and in extension an indication of number of OSCs (One stop centre) needed at state level. The reason we compare at state level is because sanctions and funds are released at state level. 
+
+
+The below plot depicts a view of how crime rate has changed across states and union territories (UT) over the last 10 years. 
+
+```{r}
+crime_state = read_csv(here("violence_against_women/year wise crime.csv"))
+
+ggplot(crime_state) +
+  geom_line(aes(x=Year, y=Crime_rate))+
+  labs(title = "Trend of crime cases against women over last 10 years",
+       x = "Year",
+       y = "Total cases of violence against women")
+
+
+```
+
+
+## Methods
+
+
+Data for this paper has been collected from multiple sources and is a combination of excel downloads and telephonic inputs. I first use agglomerative hierarchical clustering on two datasets – law enforcement and position of females. Law enforcement dataset consists of performance metrics at state level such as conviction rate and pendency rate. Position of females’ dataset consists of interesting information. We look at whether female have tools to be independent in terms of employment, education and how are they involved in decision making of their day-to-day lives. 
+
+
+I am going to expand a little more on decision making attributes data. This is pulled from National Health Family Survey of India wherein women were asked multiple questions regarding their autonomous money expenditure, control over financial planning, participation in key household decisions, whether they jointly take decisions with their partners etc. This is to gauge how powerful do they feel when it comes to their own household. For example, in India 71% of women say that they take major decisions jointly with men but 56% men think that women should be allowed to make decisions jointly. The survey also covers a statement  on earning parity. India only 40% of women earn nearly as much as their partners. 
+
+
+Given the smaller size of the dataset I observed better results from hierarchical clustering over kmeans. Post this I perform PCA to summarise 37 categories of crime against women. The idea is to compress these categories into a smaller number so I can further build a predictive model using these variables (and some more). Finally in the end I use random forest (over gradient boosting as rf provides lower out of sample error) to predict crime rate at district level. I then compare this to existing number of functional OSCs and analyse where we may need to augment efforts. The reason I don’t directly predict the number of OSCs is because currently the structure of OSC is unknown to me – i.e number of employees dedicated to each wing of the centre, target audience magnitude, hiring plan etc. 
+
+## Results
+
+When I perform hierarchical clustering on factors that affect empowering of women (appendix for more details) the output is quite satisfactory. For visualisation I have plotted the percentage of women of think they should be involved in major decision making as their husbands against the literacy rate of women. We definitely observe some form of grouping 
+
+```{r}
+#reading the file and scaling and centering
+fempos = read_csv(here("violence_against_women/Position of females.csv"))
+X = fempos[,-1]
+X = scale(X, center=TRUE, scale=TRUE)
+X_dist = dist(X, method='euclidean')
+
+#hier clustering
+h2 = hclust(X_dist, method='complete')
+
+cluster2 = cutree(h2, k=5)
+
+D2 = data.frame(X, z1 = cluster2, z2 = fempos$State)
+ggplot(D2) + geom_point(aes(x=literacy, y=I4, col=factor(z1)))+
+  labs(title = "Clustering of literacy rates among women who think they should be involved in major decision making",
+       x = "Female Literacy Rate",
+       y = "Decision Making")
+```
+
+Below table represents state and cluster mapping
+
+```{r}
+#summarise state and cluster mapping
+df1 = D2 %>%
+  select(z1,z2) %>%
+  arrange(z1)
+colnames(df1) = c("Cluster","State/UT")
+df1 = df1 %>%
+  kbl(caption = "Clustering of states for women seeking equal role in decision making") %>%
+  kable_material_dark()
+df1
+```
+
+The plot shows that states in 4 and 5 cluster have high literacy rates but are less empowered in decision making and cluster 1 states have lower literacy but higher authority. Glancing at the table I can see cluster 4 states belong to the category with high crime rates and these expectedly appear in lower empowerment cluster. This is not the most balanced dendogram but still quite better than kmeans. Cluster 1 states belong to lower crime occurrence category. So, there is definitely some sort of grouping that is reflective of crime cases. 
+
+
+Now we do a similar analysis for law enforcement factors
+
+
+```{r}
+
+#law enforcement clustering
+lawenf = read_csv(here("violence_against_women/Law Enforcement.csv"))
+Y = lawenf[,-1]
+Y = scale(Y, center=TRUE, scale=TRUE)
+Y_dist = dist(Y, method='euclidean')
+h1 = hclust(Y_dist, method='complete')
+cluster1 = cutree(h1, k=5)
+D1 = data.frame(Y, a1 = cluster1, a2 = lawenf$State)
+ggplot(D1) + geom_point(aes(x=court_pending, y=court_convic, col=factor(a1)))+
+  labs(title = "Clustering of states based on law enforcement factors",
+       x = "Number of cases pending for trail",
+       y = "Number of cases convicted in court")
+
+df2 = D1 %>%
+  select(a1,a2) %>%
+  arrange(a1)
+colnames(df2) = c("Cluster","State/UT")
+df2 = df2 %>%
+  kbl(caption = "Cluster grouping of states according to law enforcement factors") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+df2
+
+```
+
+
+Clustering here was not very useful as most of the states were put in cluster 2. This is mainly because of outliers. While the outliers are not very intense but since the sample size is small their deviation is amplified. To improve this analysis it would be wise to move to a bigger sample size which means this information will have to be collected on district level which at the moment is not publicly available. 
+
+
+Next, we move on to the 3rd dataset which lists 36 categories of crime against women. Here the data is collected at district level. I bring this down to 18 categories of crime that explain 75% of the variation in the data. 
+
+```{r}
+crime = read_csv(here("violence_against_women/Crime raw data.csv"))
+L = crime[, -(1:2)]
+L = scale(L, center=TRUE, scale=TRUE)
+
+pc1 = prcomp(L, scale=TRUE, rank=18)
+
+summary(pc1)
+
+loadings_summary = pc1$rotation %>%
+  as.data.frame()%>%
+  rownames_to_column('crime_category')
+
+ggplot(loadings_summary) +geom_col(aes(x=reorder(crime_category, PC1),y=PC1))+xlab("PC1")+ylab("Crime Category")+coord_flip()
+
+ggplot(loadings_summary) +geom_col(aes(x=reorder(crime_category, PC2),y=PC2))+xlab("PC2")+ylab("Crime Category")+coord_flip()
+
+
+```
+
+The first PCA component seems to be more or less an average (except for 2 categories which are lower in number). Later on when we perform random forest we will notice that this is the most important variable in the predictive modelling. The second PCA component is interesting in that it has contrasted the crime categories that are more prevalent versus less frequent. For example, rape, cruelty by family members of husband, dowry, coerced prostitution, child assault, acid attack etc occur (or at least reported) than kidnapping for ransom, insulting modesty etc. This is a good indication to policymakers that which area of crime and justice requires foremost focus. India is a huge country with million problems and therefore funnelling approach becomes very crucial. These stats can prove useful in those cases. 
+
+
+Now we predict number of cases using random forest. I used gradient boosting method as well but random forest gave a lower RMSE (116) when compared to boosting (160). This prediction is done on the testing set of the crime data. Also, this set is not comprehensive of all states. Since the district level information was collected by visiting individual websites and calling up police stations, I could not complete it for all 1500 districts and instead focused on districts with high number of cases. 
+
+
+```{r}
+crime_against_women = read_csv(here("violence_against_women/crime against women raw data.csv"))
+
+crime_combined = data.frame(crime_against_women,
+                            pc1$x)
+train_frac = 0.8
+N = nrow(crime_combined)
+N_train = floor(train_frac*N)
+N_test = N - N_train
+train_ind = sample.int(N, N_train, replace=FALSE) %>% sort
+crime_train = crime_combined[train_ind,]
+crime_test = crime_combined[-train_ind,]
+
+crime_forest = randomForest(tot_crime ~ .,
+                            data = crime_train, ntree=500, importance = TRUE)
+
+
+
+```
+
+Looking at the variable importance graph, as expected PC1 is most important when it comes to modelling. Surprisingly number of women police stations is least important. Now this can mean either of two things: a) in fact women police stations don’t make women safer which is highly unlikely or b) there aren’t enough women police stations built to analyse the data which makes much more sense here. Most places don’t have women police station or have just 1 as a result of which there is not much variation in this data for the algorithm to learn from. This is an interesting insight into how to interpret the variable importance graph. 
+
+```{r, figures-side, fig.show="hold", out.width="50%"}
+
+vi = varImpPlot(crime_forest, type=1)
+
+partialPlot(crime_forest, as.data.frame(crime_test), 'PC1', las=1)
+partialPlot(crime_forest, as.data.frame(crime_test), 'PC2', las=1)
+partialPlot(crime_forest, as.data.frame(crime_test), 'emp', las=1)
+partialPlot(crime_forest, as.data.frame(crime_test), 'head', las=1)
+
+```
+
+Partial dependence plots of PC1 and PC2 are quite reasonable as they indicate crime rate, increasing those factors would increase likelihood of crime. Head graph depicts how crime rate changes as proportion of females heading household increases which is conceivable as heading household is empowering. What is surprising is the how crime rate changes with female employment. It reduces and then is pretty much ineffective. This goes to say that being employed is not sufficient enough to evade violence or feel empowered to evade crime. This is what various research literature also suggest. 
+
+
+## Conclusion
+
+Looking at the comparison between predicted crime rate and actual functional OSCs tells gross mismatch. Most centres need more centres. West Bengal has some districts topping the list in crime rate consistently and there is no functional centre yet. Whereas Arunachal Pradesh has excess of centres. Delhi and Rajasthan which have been infamous for rape cases are expected to handle over 100 cases. This explains that machine learning models are definitely superior to mere weighted average approach. The implications are huge here because based on their calculation, funds and contracts are sanctioned. Currently one of the major blockers this scheme has been insufficient funds. Therefore, judicious spending warrants a more sophisticated methodology of arriving at the number of centres. 
+
+
+
+```{r}
+
+yhat_crime_forest = predict(crime_forest, crime_test)
+
+df4 = crime_test %>%
+  mutate(yhat_crime_forest = predict(crime_forest, crime_test)) %>%
+  select(State, yhat_crime_forest)
+
+df5 = df4 %>%
+  group_by(State) %>%
+  mutate(tot_pred_crime = round(sum(yhat_crime_forest),2))%>%
+  select(State, tot_pred_crime)
+
+df6 = df5[!duplicated(df5), ]
+
+osc = read_csv(here("violence_against_women/OSC.csv"))
+
+dfn = merge(df6, osc, by = "State")
+
+dfn = dfn %>%
+  mutate(cases_per_esc = round(tot_pred_crime/OSCs)) %>%
+  kbl(caption = "Number of cases to be handled by each OSC as per predictions") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+dfn
+
+
+```
+
+A future development of this project would be to somehow factor in victim blaming sentiment in the realm of violence. India is plagued by victim targeting as is suggested by multiple surveys however there is no official public data available on this. Such factors influence whether women/girls are willing to report these cases. Even today thousands of females don’t report sexual abuse because of the fear of it being backfired. 
+
+Clustering has some very useful insights with respect to policy. Discerning similarities between states can help exchange policies that have worked for one them into the others. Implementing policy without having to reinvent the wheel cannot be done naively but certainly is a low-hanging fruit. 
+
+
+A further improvement would be to gather data at district level in order to obtain bigger samples. Personally, I feel the samples size for clustering were not big enough for the algorithms to learn. While I had a large sample for random forest but I think one could benefit from rich data of Indian demography.
+
+I still have no explanation for why factors such as female employment, female heads, literacy rate have lower importance in the forest modelling but that is not what I am trying to do here. Random forest gave the best and least out of sample error and therefore the its predictive powers are promising. 
+
+
+## Appendix
+
+### Description of variables:
+I1 = Alone or jointly with their husband decide how their own earnings are used
+I2 = Alone or jointly with their husband decide how their husband's earnings are used
+I3 = Earn more or about the same as their husband
+I4 = Percentage of women who usually make decisions alone or jointly with their husband
+I5 = Percentage of men who say that a wife should have an equal or greater say alone or jointly with her husband in
+Emp = female employment with respect to female population
+Head = Percentage of households headed by women
+Literacy = Percentage of women aged seven and above who can read and write in any language with respect to female population
+Pol_chrgsheet = Percentage of cases charge sheeted by police 
+Pol_pending = Percentage of cases pending investigation by the police 
+Pol_convic = Percentage of convictions by police 
+Court_pending = Percentage of cases pending trial in court
+Court_convic = Percentage of cases convicted by the court 
+Pol_perlakh = Number of police officers per 100000 population 
+Pol_100sqkm = Number of police officers per 100 km sq
+Perc_womenpol = Percentage of women police officers 
+No_womenpol_stations = Number of women police stations in the area 
+Sex_ratio = Proportion of women to men
+Tot_crime = Total number of crime against women
+Murder_with_rape = Sum of Murder with Rape/Gang Rape
+Dowry_deaths = Sum of Dowry Deaths (Sec. 304B IPC)
+Suicide = Sum of Abetment to Suicide of Women (Sec. 305/306 IPC)
+Miscarriage = Sum of Miscarriage (Sec. 313 & 314 IPC)
+Acid_attack = Sum of Acid Attack (Sec. 326A IPC)
+Attempt_acid_attack = Sum of Attempt to Acid Attack (Sec. 326B IPC)
+Cruelty_husbandfamily = Sum of Cruelty by Husband or his relatives (Sec. 498 A IPC)
+Kidnap = Sum of Kidnapping & Abduction (Sec. 336 IPC)
+Kidnap_murder = Sum of Kidnapping & Abduction in order to Murder (Sec. 364 IPC)
+Kidnap_ransom = Sum of Kidnapping for Ransom (Sec. 364A IPC)
+Kidnap_miscarriage = Sum of Kidnapping & Abduction of Women to compel her for marriage (Sec. 366 IPC)
+Procuration_minor = Sum of Procuration of Minor Girls (Sec. 366A IPC)
+Procuration_foreign_girls = Sum of Importation of Girls from Foreign Country (Sec. 366B IPC)
+Kidnap_others = Sum of Kidnapping and Abduction of Women – Others (Secs.363A, 365, 367, 368, 369 IPC)
+Trafficking = Sum of Human Trafficking (Sec. 370 & 370A IPC)  
+Sell_minor = Sum of Selling of Minor Girls (Sec. 372 IPC)
+Buy_minor = Sum of Buying of Minor Girls (Sec. 373 IPC)
+Rape = Sum of Rape
+Attmpt_rape = Sum of Attempt to Rape
+Modesty_attack = Sum of Assault on Women with Intent to Outrage her Modesty
+Insult_modesty = Sum of Insult to the Modesty of Women
+Dowry = Sum of Dowry Prohibition Act, 1961
+Prostitution = Sum of Procuring, inducing Children for the sake of prostitution (Section 5)
+Detain_pros = Sum of Detaining a person in premises where prostitution is carried on (Section 6)
+Vicinity_pros = Sum of Prostitution in or in the vicinity of public places (Section 7)
+Soliciting_pros = Sum of Seducing or soliciting for purpose of prostitution (Section 8)
+Pros_others = Sum of Other Sections under ITP Act
+Domestic_violence = Sum of Protection of Women from Domestic Violence Act
+Publish_obscene = Sum of Publishing or Transmitting of Sexually Explicit Material (Sec. 67A/67B (Girls) IT Act)
+Cybercrime = Sum of Other Women Centric Cyber Crimes (Ex. Blackmailing/ Defamation/Morphing/ Fake Profile)
+Child_rape = Sum of Child Rape (Sec. 4 & 6 of POCSO Act) / Sec. 376 IPC)
+Child_assault = Sum of Sexual Assault of Children (Sec. 8 & 10 of POCSO Act) / Sec. 354 IPC)
+Sexual_harassment = Sum of Sexual Harassment (Sec. 12 of POCSO Act) / Sec. 509 IPC)
+Child_porn = Sum of Use of Child for Pornography/Storing Child Pornography Material (Sec. 14 & 15 of POCSO Act)
+POCSO1 = Sum of POCSO Act (Sections 17 to 22) / Other offences of POCSO Act
+POCSO2 = Sum of POCSO Act  r/w Section 377 IPC / Unnatural Offences
+Indecency = Sum of Indecent Representation of Women (Prohibition) Act, 1986
+
+
+### Data Sources:
+Ministry of Women and Child Development
+National Crime Records Bureau  
+Census of India 2011
+District Handbook, Census of India 
+Telephonic conversations with Police Districts in India 
+
+
+```{r}
+df3 = round(pc1$rotation,2) %>%
+  kbl(caption = "Principal Components of crime categories") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+df3
+```
