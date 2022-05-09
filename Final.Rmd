@@ -3,6 +3,7 @@ title: "Insights from Machine Learning Models on cases of Violence against Women
 author: "Sonali Mishra"
 date: "09/05/2022"
 output: pdf_document
+abstract: "The paper examines gender-based violence against women scenario in India across states, union territories and districts. We look at various factors such as presence of law enforcement specifically geared towards safety of women, socio-economic positioning of females in the society in terms of decision making, education and employment and current crime rate against women prevailing in the country. Perform clustering to understand similarities and resemblances between states and finally develop a predictive model to forecast crime rate. "
 ---
 
 ```{r setup, include=FALSE}
@@ -65,13 +66,7 @@ librarian::shelf(
 here::i_am("Data-Mining-PS4/include.R")
 ```
 
-## Abstract
-
-
-The paper examines gender-based violence against women scenario in India across states, union territories and districts. We look at various factors such as presence of law enforcement specifically geared towards safety of women, socio-economic positioning of females in the society in terms of decision making, education and employment and current crime rate against women prevailing in the country. Perform clustering to understand similarities and resemblances between states and finally develop a predictive model to forecast crime rate. 
-
-
-## Introduction
+## Overview of Crime against women in India
 
 
 India ranks as one of the most unsafe countries for in terms of women safety. According to NCRB (National Crime Records Bureau) crime is committed against women every 3 minutes. Crime is committed in different forms such as domestic violence, rape, dowry, modesty defamation and more. Alarmingly 65% of the men believe that women “deserve to be beaten up”. Recipients of the crime range from infants to elderly. 
@@ -98,18 +93,18 @@ ggplot(crime_state) +
 ```
 
 
-## Methods
+## Methodology and Data Gathering
 
 
 Data for this paper has been collected from multiple sources and is a combination of excel downloads and telephonic inputs. I first use agglomerative hierarchical clustering on two datasets – law enforcement and position of females. Law enforcement dataset consists of performance metrics at state level such as conviction rate and pendency rate. Position of females’ dataset consists of interesting information. We look at whether female have tools to be independent in terms of employment, education and how are they involved in decision making of their day-to-day lives. 
 
 
-I am going to expand a little more on decision making attributes data. This is pulled from National Health Family Survey of India wherein women were asked multiple questions regarding their autonomous money expenditure, control over financial planning, participation in key household decisions, whether they jointly take decisions with their partners etc. This is to gauge how powerful do they feel when it comes to their own household. For example, in India 71% of women say that they take major decisions jointly with men but 56% men think that women should be allowed to make decisions jointly. The survey also covers a statement  on earning parity. India only 40% of women earn nearly as much as their partners. 
+I am going to expand a little more on decision making attributes data. This is pulled from National Health Family Survey of India wherein women were asked multiple questions regarding their autonomous money expenditure, control over financial planning, participation in key household decisions, whether they jointly take decisions with their partners etc. This is to gauge how powerful do they feel when it comes to their own household. For example, in India 71% of women say that they take major decisions jointly with men but 56% men think that women should be allowed to make decisions jointly. The survey also covers a statement  on earning parity. India only 40% of women earn nearly as much as their partners. Detailed description of variables used is given in the appendix along with data sources.
 
 
 Given the smaller size of the dataset I observed better results from hierarchical clustering over kmeans. Post this I perform PCA to summarise 37 categories of crime against women. The idea is to compress these categories into a smaller number so I can further build a predictive model using these variables (and some more). Finally in the end I use random forest (over gradient boosting as rf provides lower out of sample error) to predict crime rate at district level. I then compare this to existing number of functional OSCs and analyse where we may need to augment efforts. The reason I don’t directly predict the number of OSCs is because currently the structure of OSC is unknown to me – i.e number of employees dedicated to each wing of the centre, target audience magnitude, hiring plan etc. 
 
-## Results
+## Results reconciliation 
 
 When I perform hierarchical clustering on factors that affect empowering of women (appendix for more details) the output is quite satisfactory. For visualisation I have plotted the percentage of women of think they should be involved in major decision making as their husbands against the literacy rate of women. We definitely observe some form of grouping 
 
@@ -182,7 +177,7 @@ df2
 Clustering here was not very useful as most of the states were put in cluster 2. This is mainly because of outliers. While the outliers are not very intense but since the sample size is small their deviation is amplified. To improve this analysis it would be wise to move to a bigger sample size which means this information will have to be collected on district level which at the moment is not publicly available. 
 
 
-Next, we move on to the 3rd dataset which lists 36 categories of crime against women. Here the data is collected at district level. I bring this down to 18 categories of crime that explain 75% of the variation in the data. 
+Next, we move on to the 3rd dataset which lists 36 categories of crime against women. Here the data is collected at district level. I bring this down to 18 categories of crime that explain 75% of the variation in the data. Detailed grid of 12 PCA components is attached in the Appendix.
 
 ```{r}
 crime = read_csv(here("violence_against_women/Crime raw data.csv"))
